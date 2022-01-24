@@ -4,11 +4,12 @@
  * @author Grace.Wang
  */
 import cookies from 'js-cookie';
-import { isEmpty } from 'lodash';
+import { isEmpty, isNumber } from 'lodash';
 import * as TC from './constant';
 import { rand, deepMerge, queryString } from './lib';
 import { api, httpRequset } from './helpers/request';
 import { setTokens, removeTokens } from './helpers/token';
+import errorMsg from './helpers/error-message';
 import webStorage from './helpers/storage';
 import privateMethods from './privateMethods';
 
@@ -158,7 +159,7 @@ class TokenInjection {
 
           // 請求次數超過最大限制，丟出例外錯誤
           if (instance.syncTimes >= TC.MAX_REQUEST_TIMES) {
-            throw new Error(TC.MAX_REQUEST_MESSAGE, instance.syncTimes);
+            throw new Error(errorMsg.maxRequest, instance.syncTimes);
           }
 
           reject(error);
@@ -216,7 +217,7 @@ class TokenInjection {
 
           // 請求次數超過最大限制，丟出例外錯誤
           if (instance.refreshTimes >= TC.MAX_REQUEST_TIMES) {
-            throw new Error(TC.MAX_REQUEST_MESSAGE, instance.refreshTimes);
+            throw new Error(errorMsg.maxRequest, instance.refreshTimes);
           }
 
           reject(error);
@@ -232,11 +233,16 @@ class TokenInjection {
    * - Cookie 中 tkchecksum 是否與 LocalStorage 中的 token_checksum 不一樣
    * - axios未執行過或已執行完成
    * - 多視窗時有可能同時執行，待觀察
-   * - 執行錯誤時關閉自動同步3秒後重啟
+   * - 執行錯誤時關閉自動同步30秒後重啟
    *
-   * @param {number} interval - 多少個間隔，每個間為500毫秒
+   * @param {number} interval - 多少個間隔，每個間隔為1分鐘
    */
   autoSync(interval = 0) {
+    if (!isNumber(interval)) {
+      console.error(errorMsg.typeVerify('number'));
+      return;
+    }
+
     const instance = this;
     const { options } = this;
     const tkCheckSum = `${options.cookie_prefix}tkchecksum`;
@@ -254,15 +260,14 @@ class TokenInjection {
     if (!instance.intervalSync) {
       instance.intervalSync = setInterval(async () => {
         // tkchecksum !== token_checksum，axios未執行或以執行完成
-        // eslint-disable-next-line prettier/prettier
-         if (checkSumNoEqual() && (getSyncState() || syncReadyState === 4)) {
+        if (checkSumNoEqual() && (getSyncState() || syncReadyState === 4)) {
           await instance.sync().catch(() => {
-            // 執行錯誤時關閉自動同步30秒後重啟
+            // 執行錯誤時關閉自動同步 等待ㄧ分鐘後重啟
             instance.autoSyncStop();
-            setTimeout(() => instance.autoSync(), 30000);
+            setTimeout(() => instance.autoSync(), TC.TOKEN_AUTO_SYNC_RESTART);
           });
         }
-      }, interval * 1000 || TC.TOKEN_AUTO_SYNC_INTERVAL);
+      }, 1000 * 60 * Math.abs(interval) || TC.TOKEN_AUTO_SYNC_INTERVAL);
     }
   }
 
