@@ -238,6 +238,7 @@ class TokenInjection {
    * @param {number} interval - 多少個間隔，每個間隔為1分鐘
    */
   autoSync(interval = 0) {
+    // 檢查間隔分鐘參數是否為數值型態
     if (!isNumber(interval)) {
       console.error(errorMsg.typeVerify('number'));
       return;
@@ -261,10 +262,17 @@ class TokenInjection {
       instance.intervalSync = setInterval(async () => {
         // tkchecksum !== token_checksum，axios未執行或以執行完成
         if (checkSumNoEqual() && (getSyncState() || syncReadyState === 4)) {
-          await instance.sync().catch(() => {
-            // 執行錯誤時關閉自動同步 等待ㄧ分鐘後重啟
-            instance.autoSyncStop();
-            setTimeout(() => instance.autoSync(), TC.TOKEN_AUTO_SYNC_RESTART);
+          await instance.sync().catch((error) => {
+            // 取得 回覆資源
+            const { response } = error;
+            // 取得 錯誤狀態碼
+            let errorCode = response ? response.status : 0; //eslint-disable-line
+
+            // 執行錯誤時關閉自動同步 等待ㄧ分鐘後重啟 (排除 401 Code：Token 失效發還狀態)
+            if (errorCode !== 401) {
+              instance.autoSyncStop();
+              setTimeout(() => instance.autoSync(), TC.TOKEN_AUTO_SYNC_RESTART);
+            }
           });
         }
       }, 1000 * 60 * Math.abs(interval) || TC.TOKEN_AUTO_SYNC_INTERVAL);
@@ -332,7 +340,6 @@ class TokenInjection {
           const refreshTime = createTime + expireTime - TC.TOKEN_REFRESH_BEFORE;
 
           // 當 現在時間 超過 過期時間 - TokenRefreshBefore 時觸發更新 Token
-
           if (
             nowTime >= refreshTime &&
             (getRefreshState() || refreshReadyState === 4)
