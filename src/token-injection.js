@@ -30,6 +30,8 @@ const DEFAULTS = Object.freeze({
   xhr_with: true,
   // 非登入狀態的 Callback
   onLogout: null,
+  // 401 未授權的 Callback
+  unauthorized: null,
 });
 
 class TokenInjection {
@@ -157,9 +159,9 @@ class TokenInjection {
           // 請求次數計數
           instance.syncTimes += 1;
 
-          // 請求次數超過最大限制，丟出例外錯誤
+          // 請求次數超過最大限制錯誤訊息
           if (instance.syncTimes >= TC.MAX_REQUEST_TIMES) {
-            throw new Error(errorMsg.maxRequest, instance.syncTimes);
+            console.error(`[Sync]: ${errorMsg.maxRequest}`);
           }
 
           reject(error);
@@ -215,9 +217,9 @@ class TokenInjection {
           // 請求次數計數
           instance.refreshTimes += 1;
 
-          // 請求次數超過最大限制，丟出例外錯誤
+          // 請求次數超過最大限制錯誤訊息
           if (instance.refreshTimes >= TC.MAX_REQUEST_TIMES) {
-            throw new Error(errorMsg.maxRequest, instance.refreshTimes);
+            console.error(`[Refresh]: ${errorMsg.maxRequest}`);
           }
 
           reject(error);
