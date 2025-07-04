@@ -527,14 +527,14 @@ class TokenInjection {
   isLogin() {
     const { options } = this;
     const loginKey = `${options.cookie_prefix}login`;
-    const loginCookie = cookies.get(loginKey);  
-    let cookieLogin = Boolean(loginCookie);
+    const loginCookie = cookies.get(loginKey);
+    const cookieLogin = Boolean(loginCookie);
 
-    if(cookieLogin){
+    if (cookieLogin) {
       return true;
     }
 
-    let storageLogin = webStorage.get(loginKey);
+    const storageLogin = webStorage.get(loginKey);
     return Boolean(storageLogin);
   }
 
