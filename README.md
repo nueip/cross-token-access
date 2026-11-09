@@ -120,11 +120,19 @@ var tokenInjection = new TokenInjection(options);
 
 # Methods
 
+## 何時視為登出
+
+- 只有伺服器表示憑證無效時才刪除 Token、停止定期器並呼叫 `onLogout`：任何請求回 401，或 `refresh()` 回 400（refresh token 無效）
+- 限流（429）、拒絕（403）、伺服器錯誤（5xx）、逾時、網路中斷，以及 refresh 以外的請求回 400，都保留 Token 與定期器
+
 ## init()
 
-- 初始化執行
+- 初始化執行：同步一次 Token，成功後啟動
   - 自動同步/刷新 Token
   - 自動登出倒數
+- 同步回 401：轉導 IAM 登出頁並 reject
+- 超過每分鐘同步次數上限：reject `RateLimitError`
+- 其他錯誤：沿用現有 Token 照常啟動上述排程並 resolve，由定期同步重新取得
 
 ## sync()
 
@@ -132,7 +140,7 @@ var tokenInjection = new TokenInjection(options);
 
   - Promise 方法
 
-- 執行一次，向 oAuth Server 同步 Token 資訊，同步錯誤時，檢查是否為登入狀態，否時刪除 Token
+- 執行一次，向 oAuth Server 同步 Token 資訊；失敗時 reject，是否刪除 Token 依「何時視為登出」
 
 ## autoSync(interval)
 
@@ -144,8 +152,7 @@ var tokenInjection = new TokenInjection(options);
   - Cookie 中 tkchecksum 是否與 LocalStorage 中的 token_checksum 不一樣
   - Axios 未執行過或已執行完成
 - 多視窗時有可能同時執行，待觀察
-- 請求次數超過，自動登出
-- 執行錯誤時關閉自動同步 3 秒後重啟
+- 回 401 時停止；其他錯誤（含超過每分鐘同步次數上限）關閉自動同步 1 分鐘後重啟
 
 ## autoSyncStop()
 
@@ -172,8 +179,7 @@ var tokenInjection = new TokenInjection(options);
   - 即將過期
   - Axios 未執行過或已執行完成
 - 多視窗時有可能同時執行，待觀察
-- 請求次數超過，自動登出
-- 執行錯誤時關閉自動同步 3 秒後重啟
+- 執行錯誤（含超過每分鐘刷新次數上限）時關閉自動刷新 30 秒後重啟
 
 ## autoRefreshStop
 

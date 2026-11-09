@@ -104,29 +104,31 @@ class TokenInjection {
   async init() {
     const instance = this;
 
-    return instance
-      .sync()
-      .then(() => {
-        // 載入後執行 定期同步 Token 內容
-        instance.autoSync();
+    // 定期同步、定期刷新 Token 與自動登出倒數
+    const startSchedules = () => {
+      instance.autoSync();
+      instance.autoRefresh();
+      privateMethods.autoLogout(instance);
+    };
 
-        // 載入後執行 定期刷新 Token
-        instance.autoRefresh();
-
-        // 載入後執行 自動登出倒數
-        privateMethods.autoLogout(instance);
-      })
-      .catch((error) => {
-        // 捕獲錯誤為登出狀態，轉導回 IAM 登出頁
-        if (error.isLogout) instance.logoutIAM();
-
-        // rate limit error 處理
-        if (error instanceof RateLimitError) {
-          throw error;
-        }
-
+    // 只處理 sync() 的錯誤，startSchedules 本身的例外照常拋出
+    return instance.sync().then(startSchedules, (error) => {
+      // 捕獲錯誤為登出狀態，轉導回 IAM 登出頁
+      if (error.isLogout) {
+        instance.logoutIAM();
         throw new Error(error);
-      });
+      }
+
+      // rate limit error 處理
+      if (error instanceof RateLimitError) {
+        throw error;
+      }
+
+      // 暫時性錯誤（限流、伺服器錯誤、逾時、網路中斷）：使用者仍是登入狀態，不報錯給呼叫端；
+      // 沿用現有 token 照常啟動，定期同步會在 checksum 不一致時重新取得
+      console.error('[Init]:', error);
+      startSchedules();
+    });
   }
 
   /**
@@ -228,6 +230,8 @@ class TokenInjection {
           queryString({ refresh_token: refreshToken }),
           {
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            // 攔截器據此把 400 判為 refresh token 無效
+            isRefresh: true,
           }
         )
         .then((res) => {
@@ -365,7 +369,7 @@ class TokenInjection {
       instance.intervalRefresh = -1;
       setTimeout(() => {
         // 檢查非占用狀態則不處理 (排除已重新執行 autoRefresh 或執行後又再停止的情況)
-        if (instance.intervalSync !== -1) {
+        if (instance.intervalRefresh !== -1) {
           return;
         }
 
@@ -561,6 +565,8 @@ class TokenInjection {
 
     instance.options.sso_url = config.baseURL || '';
     instance.rest = httpRequest(config);
+    // 新實體要重新掛攔截器：登出判斷、X-Requested-With 設定都在攔截器裡
+    privateMethods.interceptors(instance);
 
     return instance;
   }
