@@ -104,28 +104,32 @@ class TokenInjection {
   async init() {
     const instance = this;
 
+    // 定期同步、定期刷新 Token 與自動登出倒數
+    const startSchedules = () => {
+      instance.autoSync();
+      instance.autoRefresh();
+      privateMethods.autoLogout(instance);
+    };
+
     return instance
       .sync()
-      .then(() => {
-        // 載入後執行 定期同步 Token 內容
-        instance.autoSync();
-
-        // 載入後執行 定期刷新 Token
-        instance.autoRefresh();
-
-        // 載入後執行 自動登出倒數
-        privateMethods.autoLogout(instance);
-      })
+      .then(startSchedules)
       .catch((error) => {
         // 捕獲錯誤為登出狀態，轉導回 IAM 登出頁
-        if (error.isLogout) instance.logoutIAM();
+        if (error.isLogout) {
+          instance.logoutIAM();
+          throw new Error(error);
+        }
 
         // rate limit error 處理
         if (error instanceof RateLimitError) {
           throw error;
         }
 
-        throw new Error(error);
+        // 暫時性錯誤（限流、伺服器錯誤、逾時、網路中斷）：沿用現有 token 照常啟動，
+        // 定期同步會在 checksum 不一致時重新取得；不拋錯，呼叫端以 init().then() 掛載畫面
+        console.error('[Init]:', error);
+        startSchedules();
       });
   }
 
@@ -365,7 +369,7 @@ class TokenInjection {
       instance.intervalRefresh = -1;
       setTimeout(() => {
         // 檢查非占用狀態則不處理 (排除已重新執行 autoRefresh 或執行後又再停止的情況)
-        if (instance.intervalSync !== -1) {
+        if (instance.intervalRefresh !== -1) {
           return;
         }
 

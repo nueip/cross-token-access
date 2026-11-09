@@ -36,6 +36,21 @@ function autoLogout(instance) {
 }
 
 /**
+ * 是否為「憑證無效」的回應：取 token 時 session 失效回 401、refresh token 無效時 refresh（POST）回 400
+ *
+ * 限流（429）、拒絕（403）、伺服器錯誤（5xx）、逾時與網路中斷是暫時性錯誤，不代表使用者已登出
+ *
+ * @param {object} error - axios 錯誤
+ * @returns {boolean}
+ */
+function isInvalidCredential(error) {
+  const status = error.response?.status ?? 0; //eslint-disable-line
+  const method = (error.config?.method ?? '').toLowerCase(); //eslint-disable-line
+
+  return status === 401 || (status === 400 && method === 'post');
+}
+
+/**
  * Axios 攔截器
  *
  * @param {TokenInjection} instance
@@ -64,6 +79,11 @@ function interceptors(instance) {
       return res;
     },
     (error) => {
+      // 暫時性錯誤：保留 token 與定期器，交給呼叫端重試
+      if (!isInvalidCredential(error)) {
+        return Promise.reject(error);
+      }
+
       // 取得 回覆資源
       const { response } = error;
       // 取得 錯誤狀態碼
