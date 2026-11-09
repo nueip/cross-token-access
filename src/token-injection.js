@@ -111,26 +111,24 @@ class TokenInjection {
       privateMethods.autoLogout(instance);
     };
 
-    return instance
-      .sync()
-      .then(startSchedules)
-      .catch((error) => {
-        // 捕獲錯誤為登出狀態，轉導回 IAM 登出頁
-        if (error.isLogout) {
-          instance.logoutIAM();
-          throw new Error(error);
-        }
+    // 只處理 sync() 的錯誤，startSchedules 本身的例外照常拋出
+    return instance.sync().then(startSchedules, (error) => {
+      // 捕獲錯誤為登出狀態，轉導回 IAM 登出頁
+      if (error.isLogout) {
+        instance.logoutIAM();
+        throw new Error(error);
+      }
 
-        // rate limit error 處理
-        if (error instanceof RateLimitError) {
-          throw error;
-        }
+      // rate limit error 處理
+      if (error instanceof RateLimitError) {
+        throw error;
+      }
 
-        // 暫時性錯誤（限流、伺服器錯誤、逾時、網路中斷）：沿用現有 token 照常啟動，
-        // 定期同步會在 checksum 不一致時重新取得；不拋錯，呼叫端以 init().then() 掛載畫面
-        console.error('[Init]:', error);
-        startSchedules();
-      });
+      // 暫時性錯誤（限流、伺服器錯誤、逾時、網路中斷）：使用者仍是登入狀態，不報錯給呼叫端；
+      // 沿用現有 token 照常啟動，定期同步會在 checksum 不一致時重新取得
+      console.error('[Init]:', error);
+      startSchedules();
+    });
   }
 
   /**
@@ -232,6 +230,8 @@ class TokenInjection {
           queryString({ refresh_token: refreshToken }),
           {
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            // 攔截器據此把 400 判為 refresh token 無效
+            isRefresh: true,
           }
         )
         .then((res) => {
@@ -565,6 +565,8 @@ class TokenInjection {
 
     instance.options.sso_url = config.baseURL || '';
     instance.rest = httpRequest(config);
+    // 新實體要重新掛攔截器：登出判斷、X-Requested-With 設定都在攔截器裡
+    privateMethods.interceptors(instance);
 
     return instance;
   }

@@ -36,18 +36,18 @@ function autoLogout(instance) {
 }
 
 /**
- * 是否為「憑證無效」的回應：取 token 時 session 失效回 401、refresh token 無效時 refresh（POST）回 400
+ * 是否為「憑證無效」的回應：取 token 時 session 失效回 401、refresh token 無效時 refresh 請求回 400
  *
- * 限流（429）、拒絕（403）、伺服器錯誤（5xx）、逾時與網路中斷是暫時性錯誤，不代表使用者已登出
+ * refresh 請求以 refresh() 帶的 isRefresh 辨認，其他請求回 400 是輸入錯誤，不代表使用者已登出；
+ * 限流（429）、拒絕（403）、伺服器錯誤（5xx）、逾時與網路中斷是暫時性錯誤，也不登出
  *
  * @param {object} error - axios 錯誤
  * @returns {boolean}
  */
 function isInvalidCredential(error) {
   const status = error.response?.status ?? 0; //eslint-disable-line
-  const method = (error.config?.method ?? '').toLowerCase(); //eslint-disable-line
 
-  return status === 401 || (status === 400 && method === 'post');
+  return status === 401 || (status === 400 && error.config?.isRefresh === true); //eslint-disable-line
 }
 
 /**
