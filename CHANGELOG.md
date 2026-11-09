@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [2.3.2](https://github.com/nueip/cross-token-access/compare/v2.3.0...v2.3.2) (2026-11-09)
+
+
+### Bug Fixes
+
+* **interceptor:** refresh 失敗改以請求旗標辨認，axiosCreate 換實體後重掛攔截器 ([8471b87](https://github.com/nueip/cross-token-access/commit/8471b8755d15f5b7701b2c26bbfbcb1a97893f63))
+* **interceptor:** 只在憑證無效時登出並清除 token，限流、伺服器錯誤、逾時與網路中斷不再把使用者登出 ([5e12880](https://github.com/nueip/cross-token-access/commit/5e128800f4d38d8c52d559ada45d89f482474b2e))
+
 ## [2.3.0](https://github.com/nueip/cross-token-access/compare/v2.2.3...v2.3.0) (2023-12-13)
 
 

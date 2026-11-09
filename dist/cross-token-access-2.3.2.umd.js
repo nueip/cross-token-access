@@ -9858,6 +9858,11 @@
 	    return instance.logoutIAM();
 	  }, LOGOUT_TIME);
 	}
+	function isInvalidCredential(error) {
+	  var _error$response$statu, _error$response, _error$config;
+	  var status = (_error$response$statu = (_error$response = error.response) === null || _error$response === void 0 ? void 0 : _error$response.status) !== null && _error$response$statu !== void 0 ? _error$response$statu : 0;
+	  return status === 401 || status === 400 && ((_error$config = error.config) === null || _error$config === void 0 ? void 0 : _error$config.isRefresh) === true;
+	}
 	function interceptors(instance) {
 	  instance.rest.interceptors.request.use(function (config) {
 	    if (!instance.options.xhr_with) {
@@ -9872,6 +9877,9 @@
 	    return res;
 	  }, function (error) {
 	    var _response$status;
+	    if (!isInvalidCredential(error)) {
+	      return promise.reject(error);
+	    }
 	    var response = error.response;
 	    var errorCode = (_response$status = response === null || response === void 0 ? void 0 : response.status) !== null && _response$status !== void 0 ? _response$status : 0;
 	    instance.cancelTimes += 1;
@@ -10626,23 +10634,28 @@
 	    key: "init",
 	    value: (function () {
 	      var _init = _asyncToGenerator( regenerator.mark(function _callee() {
-	        var instance;
+	        var instance, startSchedules;
 	        return regenerator.wrap(function _callee$(_context) {
 	          while (1) switch (_context.prev = _context.next) {
 	            case 0:
 	              instance = this;
-	              return _context.abrupt("return", instance.sync().then(function () {
+	              startSchedules = function startSchedules() {
 	                instance.autoSync();
 	                instance.autoRefresh();
 	                privateMethods.autoLogout(instance);
-	              }).catch(function (error) {
-	                if (error.isLogout) instance.logoutIAM();
+	              };
+	              return _context.abrupt("return", instance.sync().then(startSchedules, function (error) {
+	                if (error.isLogout) {
+	                  instance.logoutIAM();
+	                  throw new Error(error);
+	                }
 	                if (error instanceof RateLimitError) {
 	                  throw error;
 	                }
-	                throw new Error(error);
+	                console.error('[Init]:', error);
+	                startSchedules();
 	              }));
-	            case 2:
+	            case 3:
 	            case "end":
 	              return _context.stop();
 	          }
@@ -10709,7 +10722,8 @@
 	        }), {
 	          headers: {
 	            'Content-Type': 'application/x-www-form-urlencoded'
-	          }
+	          },
+	          isRefresh: true
 	        }).then(function (res) {
 	          instance.refreshTimes = 0;
 	          instance.axiosPending.set('refresh', res.request.readyState);
@@ -10797,7 +10811,7 @@
 	        instance.autoRefreshStop();
 	        instance.intervalRefresh = -1;
 	        setTimeout$1(function () {
-	          if (instance.intervalSync !== -1) {
+	          if (instance.intervalRefresh !== -1) {
 	            return;
 	          }
 	          instance.intervalRefresh = null;
@@ -10928,6 +10942,7 @@
 	      var instance = this;
 	      instance.options.sso_url = config.baseURL || '';
 	      instance.rest = httpRequest(config);
+	      privateMethods.interceptors(instance);
 	      return instance;
 	    }
 	  }]);
